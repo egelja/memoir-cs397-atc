@@ -48,3 +48,6 @@ add_subdirectory(impl_linker)
 
 # Analysis passes.
 add_subdirectory(example)
+
+# Playing around with Memoir.
+add_subdirectory(vectorization)

@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 ifndef TESTS
 TESTS := $(patsubst %/, %, $(sort $(wildcard */)))
 endif

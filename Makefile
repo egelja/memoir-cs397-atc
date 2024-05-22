@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 NOELLE_DIR ?= compiler/noelle
 BUILD_DIR=.build.dir
 HOOKS_DIR=.githooks
