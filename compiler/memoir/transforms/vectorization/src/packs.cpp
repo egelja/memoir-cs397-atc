@@ -19,9 +19,12 @@ Pack::dbg_string()
 std::string
 PackSet::dbg_string()
 {
+    if (packs_.empty())
+        return "{}";
+
     std::string str = "{\n";
 
-    for (auto* pack : this->packs_)
+    for (auto* pack : packs_)
         str += pack->dbg_string() + "\n";
 
     str += "}";
