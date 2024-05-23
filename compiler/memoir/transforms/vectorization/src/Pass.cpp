@@ -52,8 +52,23 @@ public:
         return;
     }
 
+    PackSet
+    create_seeded_pack_set()
+    {
+        bool found_match = false;
+
+        std::unordered_set<llvm::memoir::AccessInst*> matched_left;
+        std::unordered_set<llvm::memoir::AccessInst*> matched_right;
+
+        PackSet packset;
+        process_index_read_seeds_(packset); // IndexReadInst
+
+        return packset;
+    }
+
+private:
     bool
-    indexesAreAdjacent(llvm::Value& left, llvm::Value& right)
+    indices_adjacent_(llvm::Value& left, llvm::Value& right)
     {
         // by convention, we will only return true if right = left + 1
         if (llvm::ConstantInt* left_int = llvm::dyn_cast<llvm::ConstantInt>(&left)) {
@@ -67,7 +82,7 @@ public:
     }
 
     void
-    handleIndexReadSeeds(PackSet* ps)
+    process_index_read_seeds_(PackSet& ps)
     {
         for (auto& pair : left_free_) {
             if (pair.second.size() <= 0) {
@@ -112,10 +127,10 @@ public:
 
                     // check that indexes are adjacent and we are reading from the same
                     // sequence
-                    if (indexesAreAdjacent(left_index, right_index)
+                    if (indices_adjacent_(left_index, right_index)
                         && &left_inst->getObjectOperand()
                                == &right_inst->getObjectOperand()) {
-                        ps->insert(
+                        ps.insert(
                             &left_inst->getCallInst(), &right_inst->getCallInst()
                         );
 
@@ -136,21 +151,6 @@ public:
                 left_set.erase(left_memoir_inst);
             }
         }
-    }
-
-    PackSet*
-    createSeededPackSet()
-    {
-        bool found_match = false;
-
-        std::unordered_set<llvm::memoir::AccessInst*> matched_left;
-        std::unordered_set<llvm::memoir::AccessInst*> matched_right;
-
-        PackSet* packset = new PackSet();
-
-        handleIndexReadSeeds(packset);
-
-        return packset;
     }
 };
 
@@ -174,11 +174,8 @@ struct SLPPass : public llvm::ModulePass {
             visitor.visit(i);
         }
 
-        PackSet* packset = visitor.createSeededPackSet();
-
-        llvm::memoir::println("Seeded PackSet: ", packset->dbg_string());
-
-        delete packset;
+        PackSet packset = visitor.create_seeded_pack_set();
+        llvm::memoir::println("Seeded PackSet: ", packset.dbg_string());
 
         return false;
     }
