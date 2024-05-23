@@ -1,23 +1,22 @@
-#include "llvm/Pass.h"
+#include "packs.hpp"
 
-#include "llvm/IR/Function.h"
-#include "llvm/IR/InstIterator.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include <llvm/IR/Function.h>
+#include <llvm/IR/InstIterator.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Pass.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
+
 #include "memoir/analysis/TypeAnalysis.hpp"
 #include "memoir/ir/Instructions.hpp"
 #include "memoir/support/InternalDatatypes.hpp"
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
-
-#include <iostream>
-#include <string>
 
 /*
  * Author(s): Kevin Hayes
@@ -27,88 +26,14 @@ namespace {
 
 using namespace llvm::memoir;
 
-class Pack {
-protected:
-    std::deque<llvm::Instruction*> instructions;
-
-public:
-    void
-    appendRight(llvm::Instruction* i)
-    {
-        instructions.push_back(i);
-    }
-
-    void
-    appendLeft(llvm::Instruction* i)
-    {
-        instructions.push_front(i);
-    }
-
-    std::string
-    dbg_string(void)
-    {
-        bool first_iter = true;
-        std::string s;
-        llvm::raw_string_ostream ss(s);
-        ss << "(";
-        for (auto* i : instructions) {
-            if (!first_iter) {
-                ss << ", ";
-            }
-            ss << *i;
-        }
-        ss << ")";
-        return ss.str();
-    }
-};
-
-class PackSet {
-protected:
-    std::unordered_set<Pack*> packs;
-
-public:
-    ~PackSet(void)
-    {
-        for (auto* pack : packs) {
-            delete pack;
-        }
-    }
-
-    void
-    insertPair(llvm::Instruction* left, llvm::Instruction* right)
-    {
-        Pack* pair = new Pack();
-        pair->appendRight(left);
-        pair->appendRight(right);
-        packs.insert(pair);
-    }
-
-    std::string
-    dbg_string(void)
-    {
-        bool first_iter = true;
-        std::string str = "{\n";
-        for (auto* pack : this->packs) {
-            if (!first_iter) {
-                str += ", ";
-            }
-            str += pack->dbg_string();
-            str += "\n";
-            first_iter = false;
-        }
-        str += "}";
-        return str;
-    }
-};
-
 class PackSeeder : public llvm::memoir::InstVisitor<PackSeeder, void> {
     // In order for the wrapper to work, we need to declare our parent classes as
     // friends.
     friend class llvm::memoir::InstVisitor<PackSeeder, void>;
     friend class llvm::InstVisitor<PackSeeder, void>;
 
-    std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> right_free;
-    std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> left_free;
+    std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> right_free_;
+    std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> left_free_;
 
 public:
     // We _always_ need to implement visitInstruction!
@@ -122,8 +47,8 @@ public:
     void
     visitIndexReadInst(IndexReadInst& I)
     {
-        this->right_free[I.getKind()].insert(&I);
-        this->left_free[I.getKind()].insert(&I);
+        right_free_[I.getKind()].insert(&I);
+        left_free_[I.getKind()].insert(&I);
         return;
     }
 
@@ -144,7 +69,7 @@ public:
     void
     handleIndexReadSeeds(PackSet* ps)
     {
-        for (auto& pair : left_free) {
+        for (auto& pair : left_free_) {
             if (pair.second.size() <= 0) {
                 continue;
             }
@@ -156,8 +81,8 @@ public:
 
             auto kind = pair.first;
             auto& left_set = pair.second;
-            auto right_iter = right_free.find(kind);
-            if (right_iter == left_free.end() || right_iter->second.size() <= 0) {
+            auto right_iter = right_free_.find(kind);
+            if (right_iter == left_free_.end() || right_iter->second.size() <= 0) {
                 // We have right possibilities but no left
                 continue;
             }
@@ -190,7 +115,7 @@ public:
                     if (indexesAreAdjacent(left_index, right_index)
                         && &left_inst->getObjectOperand()
                                == &right_inst->getObjectOperand()) {
-                        ps->insertPair(
+                        ps->insert(
                             &left_inst->getCallInst(), &right_inst->getCallInst()
                         );
 
@@ -214,7 +139,7 @@ public:
     }
 
     PackSet*
-    createSeededPackSet(void)
+    createSeededPackSet()
     {
         bool found_match = false;
 
@@ -223,7 +148,7 @@ public:
 
         PackSet* packset = new PackSet();
 
-        this->handleIndexReadSeeds(packset);
+        handleIndexReadSeeds(packset);
 
         return packset;
     }
@@ -265,7 +190,7 @@ struct SLPPass : public llvm::ModulePass {
 
         for (llvm::Function& F : M) {
             for (llvm::BasicBlock& BB : F) {
-                changed |= this->runOnBasicBlock(BB);
+                changed |= runOnBasicBlock(BB);
             }
         }
 
