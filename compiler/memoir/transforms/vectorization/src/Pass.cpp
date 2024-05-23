@@ -71,12 +71,12 @@ private:
     indices_adjacent_(llvm::Value& left, llvm::Value& right)
     {
         // by convention, we will only return true if right = left + 1
-        if (llvm::ConstantInt* left_int = llvm::dyn_cast<llvm::ConstantInt>(&left)) {
-            if (llvm::ConstantInt* right_int =
-                    llvm::dyn_cast<llvm::ConstantInt>(&right))
+        if (auto* left_int = llvm::dyn_cast<llvm::ConstantInt>(&left)) {
+            if (auto* right_int = llvm::dyn_cast<llvm::ConstantInt>(&right)) {
                 // only works on pairs of integer for now, scev/pattern matching is
                 // future work
                 return (left_int->getSExtValue() + 1 == right_int->getSExtValue());
+            }
         }
         return false;
     }
