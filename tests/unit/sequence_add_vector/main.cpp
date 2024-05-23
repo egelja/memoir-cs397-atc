@@ -2,39 +2,35 @@
 
 #include "cmemoir/cmemoir.h"
 
+#define SEQLEN 10
+
 using namespace memoir;
 
 void add(memoir::Collection *seq1,
          memoir::Collection *seq2,
          memoir::Collection *seq3) {
-  memoir_index_write(
-      u64,
-      memoir_index_read(u64, seq1, 0) + memoir_index_read(u64, seq2, 0),
-      seq3,
-      0);
-  memoir_index_write(
-      u64,
-      memoir_index_read(u64, seq1, 1) + memoir_index_read(u64, seq2, 1),
-      seq3,
-      1);
-  memoir_index_write(
-      u64,
-      memoir_index_read(u64, seq1, 2) + memoir_index_read(u64, seq2, 2),
-      seq3,
-      2);
+
+  for (size_t i = 0; i < SEQLEN; ++i) {
+    memoir_index_write(
+        u64,
+        memoir_index_read(u64, seq1, i) + memoir_index_read(u64, seq2, i),
+        seq3,
+        i);
+  }
+
   return;
 }
 
 int main(int argc, char *argv[]) {
   printf("\nInitializing sequence\n");
 
-  auto *seq1 = memoir_allocate_sequence(memoir_u64_t, 3);
-  auto *seq2 = memoir_allocate_sequence(memoir_u64_t, 3);
-  auto *seq3 = memoir_allocate_sequence(memoir_u64_t, 3);
+  auto *seq1 = memoir_allocate_sequence(memoir_u64_t, SEQLEN);
+  auto *seq2 = memoir_allocate_sequence(memoir_u64_t, SEQLEN);
+  auto *seq3 = memoir_allocate_sequence(memoir_u64_t, SEQLEN);
 
-  for (auto i = 0; i < 3; i++) {
+  for (size_t i = 0; i < SEQLEN; i++) {
     memoir_index_write(u64, i, seq1, i);
-    memoir_index_write(u64, i, seq2, i + 3);
+    memoir_index_write(u64, i * 10, seq2, i);
   }
 
   printf("\nAdding\n");
@@ -42,9 +38,9 @@ int main(int argc, char *argv[]) {
   add(seq1, seq2, seq3);
 
   printf("\nResult: \n");
-  for (auto i = 0; i < 3; i++) {
+  for (auto i = 0; i < SEQLEN; i++) {
     auto read = memoir_index_read(u64, seq3, i);
-    printf("%lu, ", read);
+    printf("%02lu, ", read);
   }
   printf("\n");
 
