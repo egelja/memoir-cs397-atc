@@ -6,3 +6,6 @@ compile_commands.json
 *.bc
 *.ll
 **/build
+
+.cache
+enable
