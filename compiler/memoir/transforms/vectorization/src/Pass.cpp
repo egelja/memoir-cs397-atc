@@ -2,6 +2,9 @@
 #include <string>
 
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
@@ -75,12 +78,13 @@ public:
 
   std::string dbg_string(void) {
     bool first_iter = true;
-    std::string str = "{";
+    std::string str = "{\n";
     for (auto *pack : this->packs) {
       if (!first_iter) {
         str += ", ";
       }
       str += pack->dbg_string();
+      str += "\n";
       first_iter = false;
     }
     str += "}";
@@ -111,7 +115,15 @@ public:
   }
 
   bool indexesAreAdjacent(llvm::Value &left, llvm::Value &right) {
-    // TODO
+    // by convention, we will only return true if right = left + 1
+    if (llvm::ConstantInt *left_int =
+            llvm::dyn_cast<llvm::ConstantInt>(&left)) {
+      if (llvm::ConstantInt *right_int =
+              llvm::dyn_cast<llvm::ConstantInt>(&right))
+        // only works on pairs of integer for now, scev/pattern matching is
+        // future work
+        return (left_int->getSExtValue() + 1 == right_int->getSExtValue());
+    }
     return false;
   }
 
@@ -120,6 +132,7 @@ public:
       if (pair.second.size() <= 0) {
         continue;
       }
+
       if (!IndexReadInst::classof(*pair.second.begin())) {
         // It's not an IndexReadInst of some kind
         continue;
@@ -132,8 +145,10 @@ public:
         // We have right possibilities but no left
         continue;
       }
+
       auto &right_set = right_iter->second;
 
+      std::unordered_set<MemOIRInst *> left_to_remove;
       for (auto *left_memoir_inst : left_set) {
         IndexReadInst *left_inst =
             static_cast<IndexReadInst *>(left_memoir_inst);
@@ -141,7 +156,9 @@ public:
           // We'll keep this simple for now
           continue;
         }
+
         llvm::Value &left_index = left_inst->getIndexOfDimension(0);
+        std::unordered_set<MemOIRInst *> right_to_remove;
         for (auto *right_memoir_inst : right_set) {
           IndexReadInst *right_inst =
               static_cast<IndexReadInst *>(right_memoir_inst);
@@ -149,13 +166,32 @@ public:
               != left_inst->getNumberOfDimensions()) {
             continue;
           }
+
           llvm::Value &right_index = right_inst->getIndexOfDimension(0);
 
-          if (indexesAreAdjacent(left_index, right_index)) {
+          // check that indexes are adjacent and we are reading from the same
+          // sequence
+          if (indexesAreAdjacent(left_index, right_index)
+              && &left_inst->getObjectOperand()
+                     == &right_inst->getObjectOperand()) {
             ps->insertPair(&left_inst->getCallInst(),
                            &right_inst->getCallInst());
+
+            // add for removal to enforce that instructions only occupy one left
+            // and right
+            left_to_remove.insert(left_memoir_inst);
+            right_to_remove.insert(right_memoir_inst);
+            break;
           }
         }
+
+        for (auto *right_memoir_inst : right_to_remove) {
+          right_set.erase(right_memoir_inst);
+        }
+      }
+
+      for (auto *left_memoir_inst : left_to_remove) {
+        left_set.erase(left_memoir_inst);
       }
     }
   }
@@ -186,6 +222,7 @@ struct SLPPass : public llvm::ModulePass {
   bool runOnBasicBlock(llvm::BasicBlock &BB) {
     PackSeeder visitor;
     for (llvm::Instruction &i : BB) {
+      // llvm::memoir::println(i);
       visitor.visit(i);
     }
 
