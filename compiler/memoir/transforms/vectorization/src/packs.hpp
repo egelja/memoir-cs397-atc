@@ -20,6 +20,42 @@ public:
         instructions_.push_front(i);
     }
 
+    auto
+    begin()
+    {
+        return instructions_.begin();
+    }
+
+    const auto
+    begin() const
+    {
+        return instructions_.begin();
+    }
+
+    auto
+    end()
+    {
+        return instructions_.end();
+    }
+
+    const auto
+    end() const
+    {
+        return instructions_.end();
+    }
+
+    auto&
+    operator[](size_t idx)
+    {
+        return instructions_.at(idx);
+    }
+
+    const auto&
+    operator[](size_t idx) const
+    {
+        return instructions_.at(idx);
+    }
+
     std::string dbg_string();
 };
 
