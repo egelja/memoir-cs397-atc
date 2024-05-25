@@ -1,7 +1,8 @@
+#pragma once
+
 #include "llvm/IR/Instruction.h"
 
 #include <deque>
-#include <unordered_set>
 
 class Pack {
 protected:
@@ -56,30 +57,27 @@ public:
         return instructions_.at(idx);
     }
 
-    std::string dbg_string();
+    std::string dbg_string() const;
+
+    bool
+    operator==(const Pack& other) const
+    {
+        return instructions_ == other.instructions_;
+    }
 };
 
-class PackSet {
-protected:
-    // TODO we should make this a set of shared pointers
-    std::unordered_set<Pack*> packs_;
+///////////////////////////////////////////////////////////////////////////////
 
-public:
-    ~PackSet(void)
+template <>
+struct std::hash<Pack> {
+    std::size_t
+    operator()(const Pack& pack) const noexcept
     {
-        for (auto* pack : packs_) {
-            delete pack;
-        }
-    }
+        size_t seed = 0;
 
-    void
-    insert(llvm::Instruction* left, llvm::Instruction* right)
-    {
-        Pack* pair = new Pack();
-        pair->append_right(left);
-        pair->append_right(right);
-        packs_.insert(pair);
-    }
+        for (const auto& instr : pack)
+            hash_combine(seed, instr);
 
-    std::string dbg_string();
+        return seed;
+    }
 };

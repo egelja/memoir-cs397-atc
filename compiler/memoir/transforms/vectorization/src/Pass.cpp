@@ -1,4 +1,4 @@
-#include "packs.hpp"
+#include "packs/pack_set.hpp"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
@@ -15,6 +15,7 @@
 #include "memoir/analysis/TypeAnalysis.hpp"
 #include "memoir/ir/Instructions.hpp"
 #include "memoir/support/InternalDatatypes.hpp"
+#include "memoir/transforms/vectorization/src/packs/merging.hpp"
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
 
@@ -176,6 +177,13 @@ struct SLPPass : public llvm::ModulePass {
 
         PackSet packset = visitor.create_seeded_pack_set();
         llvm::memoir::println("Seeded PackSet: ", packset.dbg_string());
+
+        // TODO: Extend the packs with use-def and def-use chains
+        // P = extend_packlist(BB, P)
+        PackSet extended_packs = packset; // temp
+
+        // Combine packs into things that can be vectorized
+        auto merged_packs = merge_packs(extended_packs);
 
         return false;
     }
