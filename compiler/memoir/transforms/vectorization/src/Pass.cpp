@@ -15,6 +15,7 @@
 #include "memoir/analysis/TypeAnalysis.hpp"
 #include "memoir/ir/Instructions.hpp"
 #include "memoir/support/InternalDatatypes.hpp"
+#include "memoir/support/Print.hpp"
 #include "memoir/transforms/vectorization/src/packs/merging.hpp"
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
@@ -175,6 +176,9 @@ struct SLPPass : public llvm::ModulePass {
             visitor.visit(i);
         }
 
+        llvm::memoir::println(std::string(80, '-'));
+
+        // find packs
         PackSet packset = visitor.create_seeded_pack_set();
         llvm::memoir::println("Seeded PackSet: ", packset.dbg_string());
 
@@ -184,6 +188,7 @@ struct SLPPass : public llvm::ModulePass {
 
         // Combine packs into things that can be vectorized
         auto merged_packs = merge_packs(extended_packs);
+        llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
 
         return false;
     }

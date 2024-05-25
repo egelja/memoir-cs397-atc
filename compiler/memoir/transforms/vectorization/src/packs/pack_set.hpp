@@ -20,7 +20,44 @@ public:
         packs_.insert(std::move(pair));
     }
 
+    void
+    insert(Pack p)
+    {
+        packs_.insert(std::move(p));
+    }
+
+    void
+    remove(const Pack& pack)
+    {
+        packs_.erase(pack);
+    }
+
     std::string dbg_string() const;
+
+    /////////// C++ boilerplate stuff ////////////
+    auto
+    begin()
+    {
+        return packs_.begin();
+    }
+
+    auto
+    begin() const
+    {
+        return packs_.begin();
+    }
+
+    auto
+    end()
+    {
+        return packs_.end();
+    }
+
+    auto
+    end() const
+    {
+        return packs_.end();
+    }
 
     bool
     operator==(const PackSet& other) const

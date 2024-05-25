@@ -21,6 +21,20 @@ public:
         instructions_.push_front(i);
     }
 
+    ////////// C++ boilerplate stuff //////////
+
+    auto*
+    front() const
+    {
+        return instructions_.front();
+    }
+
+    auto*
+    back() const
+    {
+        return instructions_.back();
+    }
+
     auto
     begin()
     {
@@ -63,6 +77,12 @@ public:
     operator==(const Pack& other) const
     {
         return instructions_ == other.instructions_;
+    }
+
+    bool
+    operator!=(const Pack& other) const
+    {
+        return !(*this == other);
     }
 };
 
