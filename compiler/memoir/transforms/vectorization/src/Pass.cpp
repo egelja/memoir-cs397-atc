@@ -16,7 +16,7 @@
 #include "memoir/ir/Instructions.hpp"
 #include "memoir/support/InternalDatatypes.hpp"
 #include "memoir/support/Print.hpp"
-#include "memoir/transforms/vectorization/src/packs/merging.hpp"
+//#include "memoir/transforms/vectorization/src/packs/merging.hpp"
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
 
@@ -157,15 +157,15 @@ private:
 };
 
 
-class PackSetExtender {
+class PacksetExtender {
     // Class for building out a packset from an initial seeded pack
 
     std::unordered_set<llvm::Instruction*> free_left_instrs;
     std::unordered_set<llvm::Instruction*> free_right_instrs;
-    PackSet pack_set;
+    PackSet* pack_set;
 
 public:
-    PackSetExtender(llvm::BasicBlock& bb, PackSet& p_set) {
+    PacksetExtender(llvm::BasicBlock& bb, PackSet* p_set) {
         pack_set = p_set;
 
         for (llvm::Instruction& i : bb) {
@@ -174,7 +174,7 @@ public:
         }
 
         // remove instructions already in packs
-        for (auto it = p_set.begin(); it != p_set.end(); it++) {
+        for (auto it = p_set->begin(); it != p_set->end(); it++) {
             auto pack = *it;
             auto&  left_instr = pack[0];
             auto& right_instr = pack[1];
@@ -183,7 +183,22 @@ public:
         }
     }
 
-    void extend() {}
+    void extend() {
+        bool changed = true;
+
+        while (changed) {
+            changed = false;
+
+            for (auto it = pack_set->begin(); it != pack_set->end(); it++) {
+                auto pack = *it;
+
+                if (follow_def_uses(pack) || follow_use_defs(pack)) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
 
 private:
     bool is_isomorphic(llvm::Instruction* instr_1, llvm::Instruction* instr_2) {
@@ -195,6 +210,100 @@ private:
     bool is_independent(llvm::Instruction* instr_1, llvm::Instruction* instr_2) {
         // TODO find whether dependencies exist with NOELLE
         return true;
+    }
+
+    bool instrs_can_pack(llvm::Instruction* instr_1, llvm::Instruction* instr_2) {
+        // check that instrs are not in another pack already
+        if ((free_left_instrs.find(instr_1) == free_left_instrs.end()) || 
+            (free_right_instrs.find(instr_2) == free_right_instrs.end())) {
+            return false;
+        }
+
+        return is_isomorphic(instr_1, instr_2) && is_independent(instr_1, instr_2);
+    }
+
+    bool follow_use_defs(Pack p) {
+        // returns whether new values were added to pack_set
+        llvm::Instruction* left_instr = p[0];
+        llvm::Instruction* right_instr = p[1];
+
+        // sanity check
+        assert(is_isomorphic(left_instr, right_instr));
+
+        bool changed = false;
+        for (int i = 0; i < left_instr->getNumOperands(); i++) {
+            auto* op_1 = left_instr->getOperand(i);
+            auto* op_2 = right_instr->getOperand(i);
+
+            if (auto* op_instr_1 = llvm::dyn_cast<llvm::Instruction>(op_1)) {
+                if (auto* op_instr_2 = llvm::dyn_cast<llvm::Instruction>(op_2)) {
+                    if (instrs_can_pack(op_instr_1, op_instr_2)) {
+                        pack_set->insert(op_instr_1, op_instr_2);
+
+                        free_left_instrs.erase(op_instr_1);
+                        free_right_instrs.erase(op_instr_2);
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    bool follow_def_uses(Pack p) {
+        // returns whether new values were added to pack set
+        llvm::Instruction* left_instr = p[0];
+        llvm::Instruction* right_instr = p[1];
+
+        bool changed = false;
+        for (auto left_user : left_instr->users()) {
+            auto* left_user_instr = dyn_cast<llvm::Instruction>(left_user);
+            if (left_user_instr == NULL) {
+                continue;
+            }
+
+            for (auto right_user : right_instr->users()) {
+                auto* right_user_instr = dyn_cast<llvm::Instruction>(right_user);
+                if (right_user_instr == NULL) {
+                    continue;
+                }
+
+                if (left_user_instr == right_user_instr) {
+                    continue;
+                }
+
+                if (left_user_instr->getNumOperands() != right_user_instr->getNumOperands()) {
+                    continue;
+                }
+
+                for (int i = 0; i < left_user_instr->getNumOperands(); i++) {
+                    auto op_1 = left_user_instr->getOperand(i);
+                    auto op_2 = right_user_instr->getOperand(i);
+
+                    if (auto* op_instr_1 = dyn_cast<llvm::Instruction>(op_1)) {
+                        if (auto* op_instr_2 = dyn_cast<llvm::Instruction>(op_2)) {
+                            if (op_instr_1 == left_instr && op_instr_2 == right_instr) {
+                                if (instrs_can_pack(left_user_instr, right_user_instr)) {
+                                    pack_set->insert(left_user_instr, right_user_instr);
+                                    
+                                    free_left_instrs.erase(left_user_instr);
+                                    free_right_instrs.erase(right_user_instr);
+                                    changed = true;
+
+                                    // in the paper, this function chooses the pair of instructions that produce the 
+                                    // largest savings. since we don't have a cost model, we return the first found
+                                    return changed;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return changed;
+
     }
 };
 
@@ -225,12 +334,16 @@ struct SLPPass : public llvm::ModulePass {
         llvm::memoir::println("Seeded PackSet: ", packset.dbg_string());
 
         // TODO: Extend the packs with use-def and def-use chains
+        PacksetExtender extender(BB, &packset);
+        extender.extend();
+        llvm::memoir::println("Extended Packset: ", packset.dbg_string());
         // P = extend_packlist(BB, P)
-        PackSet extended_packs = packset; // temp
+        //PackSet extended_packs = packset; // temp
+
 
         // Combine packs into things that can be vectorized
-        auto merged_packs = merge_packs(extended_packs);
-        llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
+        //auto merged_packs = merge_packs(extended_packs);
+        //llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
 
         return false;
     }
