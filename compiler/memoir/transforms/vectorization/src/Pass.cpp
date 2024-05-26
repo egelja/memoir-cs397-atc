@@ -154,6 +154,47 @@ private:
     }
 };
 
+
+class PackSetExtender {
+    // Class for building out a packset from an initial seeded pack
+
+    std::unordered_set<llvm::Instruction*> free_left_instrs;
+    std::unordered_set<llvm::Instruction*> free_right_instrs;
+    PackSet pack_set;
+
+public:
+    PackSetExtender(llvm::BasicBlock& bb, PackSet& p_set) {
+        pack_set = p_set;
+
+        for (llvm::Instruction& i : bb) {
+            free_left_instrs.insert(&i);
+            free_right_instrs.insert(&i);
+        }
+
+        // remove instructions already in packs
+        for (auto pack : pack_set.get_packs()) {
+            auto& left_instr = (*pack)[0];
+            auto& right_instr = (*pack)[1];
+            free_left_instrs.erase(left_instr);
+            free_right_instrs.erase(right_instr);
+        }
+    }
+
+    void extend() {}
+
+private:
+    bool is_isomorphic(llvm::Instruction* instr_1, llvm::Instruction* instr_2) {
+        // only do a basic check that both instructions are "identical"
+        // other functions deal with making sure paramaters are in the correct order
+        return instr_1->getOpcode() == instr_2->getOpcode();
+    }
+
+    bool is_independent(llvm::Instruction* instr_1, llvm::Instruction* instr_2) {
+        // TODO find whether dependencies exist with NOELLE
+        return true;
+    }
+};
+
 struct SLPPass : public llvm::ModulePass {
     static char ID;
 

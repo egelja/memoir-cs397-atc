@@ -65,6 +65,7 @@ protected:
     std::unordered_set<Pack*> packs_;
 
 public:
+
     ~PackSet(void)
     {
         for (auto* pack : packs_) {
@@ -82,4 +83,8 @@ public:
     }
 
     std::string dbg_string();
+
+    std::unordered_set<Pack*> get_packs() {
+        return packs_;
+    }
 };
