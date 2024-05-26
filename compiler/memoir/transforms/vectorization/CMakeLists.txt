@@ -2,7 +2,7 @@
 set(pass_name "memoir_vectorization")
 
 # Sources
-file(GLOB pass_sources "src/*.cpp")
+file(GLOB_RECURSE pass_sources "src/*.cpp")
 
 # Declare the LLVM pass to compile
 add_memoir_transform(

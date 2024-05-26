@@ -1,4 +1,4 @@
-#include "packs.hpp"
+#include "packs/pack_set.hpp"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
@@ -15,6 +15,8 @@
 #include "memoir/analysis/TypeAnalysis.hpp"
 #include "memoir/ir/Instructions.hpp"
 #include "memoir/support/InternalDatatypes.hpp"
+#include "memoir/support/Print.hpp"
+#include "memoir/transforms/vectorization/src/packs/merging.hpp"
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
 
@@ -172,9 +174,10 @@ public:
         }
 
         // remove instructions already in packs
-        for (auto pack : pack_set.get_packs()) {
-            auto& left_instr = (*pack)[0];
-            auto& right_instr = (*pack)[1];
+        for (auto it = p_set.begin(); it != p_set.end(); it++) {
+            auto pack = *it;
+            auto&  left_instr = pack[0];
+            auto& right_instr = pack[1];
             free_left_instrs.erase(left_instr);
             free_right_instrs.erase(right_instr);
         }
@@ -215,8 +218,19 @@ struct SLPPass : public llvm::ModulePass {
             visitor.visit(i);
         }
 
+        llvm::memoir::println(std::string(80, '-'));
+
+        // find packs
         PackSet packset = visitor.create_seeded_pack_set();
         llvm::memoir::println("Seeded PackSet: ", packset.dbg_string());
+
+        // TODO: Extend the packs with use-def and def-use chains
+        // P = extend_packlist(BB, P)
+        PackSet extended_packs = packset; // temp
+
+        // Combine packs into things that can be vectorized
+        auto merged_packs = merge_packs(extended_packs);
+        llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
 
         return false;
     }
