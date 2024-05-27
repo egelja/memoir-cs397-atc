@@ -82,6 +82,11 @@ public:
     size_t num_operands() const { return pack_.num_operands(); }
 
     /**
+     * Get the cost of the pack inside this node.
+     */
+    int64_t cost() const { return pack_.cost(); }
+
+    /**
      * Get the nodes that produce data used by us.
      */
     const auto& producers() const { return producers_; }

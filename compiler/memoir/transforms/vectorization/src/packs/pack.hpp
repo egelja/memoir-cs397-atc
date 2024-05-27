@@ -52,6 +52,11 @@ public:
      */
     PackType type() const;
 
+    /**
+     * Get the cost of this pack.
+     */
+    int64_t cost() const;
+
     std::string dbg_string() const;
 
     ////////// C++ boilerplate stuff //////////

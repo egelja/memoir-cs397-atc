@@ -66,6 +66,13 @@ Pack::type() const
     return llvm_inst_type(inst);
 }
 
+int64_t
+Pack::cost() const
+{
+    // For now, always vectorize!
+    return -1;
+}
+
 std::string
 Pack::dbg_string() const
 {
