@@ -100,6 +100,15 @@ public:
      */
     const auto& children() const { return consumers_; }
 
+    /**
+     * Get the producers for the ith operand of each instruction in this pack.
+     *
+     * @param i Which operand's producers do we want?
+     *
+     * @returns A map from lane (instruction index) to producer information.
+     */
+    const LaneProducerMap& op_producers(size_t i) const { return operand_nodes_[i]; }
+
     friend class PackDAG;
 
     /////////////////////////////////
