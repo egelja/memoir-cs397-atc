@@ -5,6 +5,7 @@
 #include "llvm/IR/Instruction.h"
 
 #include <memory>
+#include <set>
 #include <unordered_map>
 
 // forward decl
@@ -15,10 +16,12 @@ class PackDAG;
  */
 class PackDAGNode {
 public:
+    using NodePtr = std::weak_ptr<PackDAGNode>;
+
     // info about the producer of some data
     struct producer_info_t {
-        std::weak_ptr<PackDAGNode> node; // who produced this data
-        size_t node_idx;                 // which lane is the data in?
+        NodePtr node;    // who produced this data
+        size_t node_idx; // which lane is the data in?
     };
 
     // Who produces the data for each lane in this pack?
@@ -33,6 +36,15 @@ private:
     // So operand_nodes_[0][1] = (p, 3) means pack node p produces operand 0 for
     // instruction 1 in lane 3
     std::vector<LaneProducerMap> operand_nodes_;
+
+    // producer and consumer sets
+    //
+    // producers create values we use
+    // consumers use our values
+    //
+    // have to be ordered sets because you can't hash a weak pointer
+    std::set<NodePtr, std::owner_less<NodePtr>> producers_;
+    std::set<NodePtr, std::owner_less<NodePtr>> consumers_;
 
     // parent node
     PackDAG* parent_;
@@ -67,6 +79,26 @@ public:
      * How many arguments does the instruction of this pack have?
      */
     size_t num_operands() const { return pack_.num_operands(); }
+
+    /**
+     * Get the nodes that produce data used by us.
+     */
+    const auto& producers() const { return producers_; }
+
+    /**
+     * Get direct predecessors (parents) of our node.
+     */
+    const auto& parents() const { return producers_; }
+
+    /**
+     * Get the nodes who consume our data.
+     */
+    const auto& consumers() const { return consumers_; }
+
+    /**
+     * Get direct successors (children) of our node.
+     */
+    const auto& children() const { return consumers_; }
 
     friend class PackDAG;
 

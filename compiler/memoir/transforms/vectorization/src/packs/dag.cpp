@@ -105,6 +105,10 @@ PackDAG::init_node_op_map_(std::shared_ptr<PackDAGNode>& node)
                 handle_cyclical_node(*node);
 
             node->operand_nodes_[op_idx][lane_idx] = {op_node, op_node_lane};
+
+            // update producer and consumer sets
+            node->producers_.insert(op_node);
+            op_node->consumers_.insert(node);
         }
     }
 }
@@ -142,6 +146,10 @@ PackDAG::update_other_op_maps_(std::shared_ptr<PackDAGNode>& node)
 
             // update its map
             user_node->operand_nodes_[op_idx][user_node_lane] = {node, lane_idx};
+
+            // update producer and consumer sets
+            node->consumers_.insert(user_node);
+            user_node->producers_.insert(node);
         }
     }
 }
