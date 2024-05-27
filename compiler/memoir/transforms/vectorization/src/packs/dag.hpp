@@ -5,6 +5,7 @@
 #include "llvm/IR/Instruction.h"
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <unordered_map>
 
@@ -171,6 +172,13 @@ public:
      * @returns A pointer to the newly created graph node.
      */
     std::shared_ptr<PackDAGNode> add_node(Pack pack);
+
+    /**
+     * Get the nodes in topological order.
+     *
+     * Uses Kahn's algorithm internally, since we know the start nodes.
+     */
+    std::optional<std::vector<std::shared_ptr<PackDAGNode>>> topological_nodes() const;
 
     /**
      * Convert this graph to a GraphViz representation that can be viewed.

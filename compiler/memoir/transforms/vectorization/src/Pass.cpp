@@ -1,7 +1,8 @@
+#include "noelle/core/Noelle.hpp"
+#include "packs/extension.hpp"
 #include "packs/merging.hpp"
 #include "packs/pack_set.hpp"
 #include "packs/seeder.hpp"
-#include "packs/extension.hpp"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
@@ -19,8 +20,6 @@
 #include "memoir/ir/Instructions.hpp"
 #include "memoir/support/InternalDatatypes.hpp"
 #include "memoir/support/Print.hpp"
-#include "noelle/core/Noelle.hpp"
-
 #include "memoir/transforms/vectorization/src/packs/dag.hpp"
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
@@ -77,6 +76,20 @@ struct SLPPass : public llvm::ModulePass {
             dag.add_node(std::move(pack));
 
         llvm::memoir::println("Graph:", dag.dbg_string());
+
+        // get topological nodes
+        auto topo_nodes = dag.topological_nodes();
+
+        if (!topo_nodes) {
+            llvm::memoir::println("Graph has cycles!");
+            return false;
+        }
+
+        // print nodes in topological order
+        llvm::memoir::println("-----------\n\nTopological nodes:\n");
+
+        for (const auto& node : *topo_nodes)
+            llvm::memoir::println(node->pack().dbg_string());
 
         return false;
     }

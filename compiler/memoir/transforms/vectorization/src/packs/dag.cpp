@@ -7,6 +7,7 @@
 #include "memoir/transforms/vectorization/src/packs/pack.hpp"
 
 #include <memory>
+#include <unordered_set>
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -152,6 +153,76 @@ PackDAG::update_other_op_maps_(std::shared_ptr<PackDAGNode>& node)
             user_node->producers_.insert(node);
         }
     }
+}
+
+std::optional<std::vector<std::shared_ptr<PackDAGNode>>>
+PackDAG::topological_nodes() const
+{
+    using node_t = std::shared_ptr<PackDAGNode>;
+
+    std::vector<node_t> res;
+
+    std::unordered_set<node_t> to_visit;
+
+    // fill the to_visit set with nodes without an incoming edge
+    // this will be just the load seeds
+    for (const auto& seed : seeds_) {
+        if (seed->type() == PackType::LOAD) {
+            assert(seed->producers().empty());
+            to_visit.insert(seed);
+        }
+    }
+
+    // get a copy of the incoming nodes for each node in the graph
+    std::unordered_map<node_t, std::unordered_set<node_t>> incoming_nodes;
+
+    for (const auto& node : nodes_) {
+        incoming_nodes[node] = {};
+
+        for (const auto& prod_ptr : node->producers()) {
+            auto producer = prod_ptr.lock();
+            assert(producer);
+
+            incoming_nodes[node].insert(producer);
+        }
+    }
+
+    // now visit the entire graph
+    while (!to_visit.empty()) {
+        // get a node to visit
+        auto node = *to_visit.begin();
+        to_visit.erase(node);
+
+        // add adjacent nodes to the set of nodes we have to visit
+        // for each node m with edge e from n to m
+        for (const auto& child_node_ptr : node->children()) {
+            // get the child node
+            auto child_node = child_node_ptr.lock();
+            assert(child_node);
+
+            // remove edge e from the graph
+            incoming_nodes[child_node].erase(node);
+
+            // if m has no other incoming edges, insert m into to_visit
+            if (incoming_nodes[child_node].empty())
+                to_visit.insert(std::move(child_node));
+        }
+
+        // add the node to our list
+        res.push_back(std::move(node));
+    }
+
+    // all edges should be gone from the graph at this point
+    // meaning no node should have any incoming nodes
+    for (const auto& [node, incoming] : incoming_nodes) {
+        if (!incoming.empty()) {
+            llvm::memoir::println("Node ", node.get(), " has incoming edges!");
+            return {};
+        }
+    }
+
+    // we're ok!
+    return res;
 }
 
 //////////////////////////////////////////////////////////////////////////////
