@@ -44,8 +44,10 @@ struct SLPPass : public llvm::ModulePass {
     bool runOnBasicBlock(llvm::BasicBlock& BB)
     {
         auto& noelle = getAnalysis<Noelle>();
+        auto pdg = noelle.getProgramDependenceGraph();
+        auto fdg = pdg->createFunctionSubgraph(*BB.getParent());
 
-        PackSeeder visitor(&noelle);
+        PackSeeder visitor(fdg);
         for (llvm::Instruction& i : BB) {
             // llvm::memoir::println(i);
             visitor.visit(i);
@@ -58,9 +60,6 @@ struct SLPPass : public llvm::ModulePass {
         llvm::memoir::println("Seeded PackSet: ", seed_packs.dbg_string());
 
         // TODO: Extend the packs with use-def and def-use chains
-        auto pdg = noelle.getProgramDependenceGraph();
-        auto fdg = pdg->createFunctionSubgraph(*BB.getParent());
-
         PackSet extended_packs = seed_packs;
         PacksetExtender extender(BB, &extended_packs, fdg);
 

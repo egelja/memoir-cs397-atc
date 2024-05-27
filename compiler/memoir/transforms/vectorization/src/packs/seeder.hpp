@@ -35,12 +35,15 @@ class PackSeeder : public llvm::memoir::InstVisitor<PackSeeder, void> {
 
     std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> right_free_;
     std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> left_free_;
+        
+    std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> write_right_free_;
+    std::map<llvm::memoir::MemOIR_Func, std::set<MemOIRInst*>> write_left_free_;
 
-    Noelle* noelle;
+    PDG* fdg;
 public:
     PackSeeder() { return; }
 
-    PackSeeder(Noelle* n);
+    PackSeeder(PDG* graph);
 
     void visitInstruction(llvm::Instruction& I)
     {
@@ -50,10 +53,16 @@ public:
 
     void visitIndexReadInst(IndexReadInst& I);
 
+    void visitIndexWriteInst(IndexWriteInst& I);
+
     PackSet create_seeded_pack_set();
 
 private:
+    bool is_independent(llvm::Instruction* instr_1, llvm::Instruction* instr_2);
+
     bool indices_adjacent_(llvm::Value& left, llvm::Value& right);
 
     void process_index_read_seeds_(PackSet& ps);
+
+    void process_index_write_seeds_(PackSet& ps);
 };
