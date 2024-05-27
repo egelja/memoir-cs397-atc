@@ -6,92 +6,45 @@
 
 class Pack {
 protected:
-    std::deque<llvm::Instruction*> instructions_;
+    std::deque<llvm::Instruction*> insts_;
 
 public:
-    void
-    append_right(llvm::Instruction* i)
-    {
-        instructions_.push_back(i);
-    }
+    void append_right(llvm::Instruction* i) { insts_.push_back(i); }
 
-    void
-    append_left(llvm::Instruction* i)
-    {
-        instructions_.push_front(i);
-    }
+    void append_left(llvm::Instruction* i) { insts_.push_front(i); }
 
-    ////////// C++ boilerplate stuff //////////
-
-    auto*
-    front() const
-    {
-        return instructions_.front();
-    }
-
-    auto*
-    back() const
-    {
-        return instructions_.back();
-    }
-
-    auto
-    begin()
-    {
-        return instructions_.begin();
-    }
-
-    const auto
-    begin() const
-    {
-        return instructions_.begin();
-    }
-
-    auto
-    end()
-    {
-        return instructions_.end();
-    }
-
-    const auto
-    end() const
-    {
-        return instructions_.end();
-    }
-
-    auto&
-    operator[](size_t idx)
-    {
-        return instructions_.at(idx);
-    }
-
-    const auto&
-    operator[](size_t idx) const
-    {
-        return instructions_.at(idx);
-    }
+    size_t index_of(llvm::Instruction* inst) const;
 
     std::string dbg_string() const;
 
-    bool
-    operator==(const Pack& other) const
-    {
-        return instructions_ == other.instructions_;
-    }
+    ////////// C++ boilerplate stuff //////////
 
-    bool
-    operator!=(const Pack& other) const
-    {
-        return !(*this == other);
-    }
+    auto* front() const { return insts_.front(); }
+
+    auto* back() const { return insts_.back(); }
+
+    auto begin() { return insts_.begin(); }
+
+    const auto begin() const { return insts_.begin(); }
+
+    auto end() { return insts_.end(); }
+
+    const auto end() const { return insts_.end(); }
+
+    auto& operator[](size_t idx) { return insts_.at(idx); }
+
+    const auto& operator[](size_t idx) const { return insts_.at(idx); }
+
+    bool operator==(const Pack& other) const { return insts_ == other.insts_; }
+
+    bool operator!=(const Pack& other) const { return !(*this == other); }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 template <>
 struct std::hash<Pack> {
-    std::size_t
-    operator()(const Pack& pack) const noexcept
+    std::size_t operator()(const Pack& pack) const noexcept
     {
         size_t seed = 0;
 

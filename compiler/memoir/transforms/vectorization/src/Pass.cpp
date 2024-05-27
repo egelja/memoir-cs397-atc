@@ -39,23 +39,20 @@ class PackSeeder : public llvm::memoir::InstVisitor<PackSeeder, void> {
 
 public:
     // We _always_ need to implement visitInstruction!
-    void
-    visitInstruction(llvm::Instruction& I)
+    void visitInstruction(llvm::Instruction& I)
     {
         // Do nothing.
         return;
     }
 
-    void
-    visitIndexReadInst(IndexReadInst& I)
+    void visitIndexReadInst(IndexReadInst& I)
     {
         right_free_[I.getKind()].insert(&I);
         left_free_[I.getKind()].insert(&I);
         return;
     }
 
-    PackSet
-    create_seeded_pack_set()
+    PackSet create_seeded_pack_set()
     {
         bool found_match = false;
 
@@ -69,8 +66,7 @@ public:
     }
 
 private:
-    bool
-    indices_adjacent_(llvm::Value& left, llvm::Value& right)
+    bool indices_adjacent_(llvm::Value& left, llvm::Value& right)
     {
         // by convention, we will only return true if right = left + 1
         if (auto* left_int = llvm::dyn_cast<llvm::ConstantInt>(&left)) {
@@ -83,8 +79,7 @@ private:
         return false;
     }
 
-    void
-    process_index_read_seeds_(PackSet& ps)
+    void process_index_read_seeds_(PackSet& ps)
     {
         for (auto& pair : left_free_) {
             if (pair.second.size() <= 0) {
@@ -161,14 +156,9 @@ struct SLPPass : public llvm::ModulePass {
 
     SLPPass() : ModulePass(ID) {}
 
-    bool
-    doInitialization(llvm::Module& M) override
-    {
-        return false;
-    }
+    bool doInitialization(llvm::Module& M) override { return false; }
 
-    bool
-    runOnBasicBlock(llvm::BasicBlock& BB)
+    bool runOnBasicBlock(llvm::BasicBlock& BB)
     {
         PackSeeder visitor;
         for (llvm::Instruction& i : BB) {
@@ -193,8 +183,7 @@ struct SLPPass : public llvm::ModulePass {
         return false;
     }
 
-    bool
-    runOnModule(llvm::Module& M) override
+    bool runOnModule(llvm::Module& M) override
     {
         bool changed;
 
@@ -208,11 +197,7 @@ struct SLPPass : public llvm::ModulePass {
         return changed;
     }
 
-    void
-    getAnalysisUsage(llvm::AnalysisUsage& AU) const override
-    {
-        return;
-    }
+    void getAnalysisUsage(llvm::AnalysisUsage& AU) const override { return; }
 };
 
 // Next there is code to register your pass to "opt"

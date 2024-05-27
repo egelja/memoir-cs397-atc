@@ -9,65 +9,44 @@ protected:
     std::unordered_set<Pack> packs_;
 
 public:
-    void
-    insert(llvm::Instruction* left, llvm::Instruction* right)
-    {
-        Pack pair;
+    /**
+     * Create a new pack with two instructions and insert it into this pack set.
+     *
+     * @param left Left instruction in the pack.
+     * @param right Right instruction in the pack.
+     */
+    void insert(llvm::Instruction* left, llvm::Instruction* right);
 
-        pair.append_right(left);
-        pair.append_right(right);
+    /**
+     * Insert an existing pack into this pack set.
+     *
+     * @param p Pack to insert.
+     */
+    void insert(Pack p) { packs_.insert(std::move(p)); }
 
-        packs_.insert(std::move(pair));
-    }
+    /**
+     * Remove a pack from this pack set.
+     *
+     * @param p pack to remove.
+     */
+    void remove(const Pack& p) { packs_.erase(p); }
 
-    void
-    insert(Pack p)
-    {
-        packs_.insert(std::move(p));
-    }
-
-    void
-    remove(const Pack& pack)
-    {
-        packs_.erase(pack);
-    }
-
+    /**
+     * Get a string representing this pack set.
+     */
     std::string dbg_string() const;
 
     /////////// C++ boilerplate stuff ////////////
-    auto
-    begin()
-    {
-        return packs_.begin();
-    }
 
-    auto
-    begin() const
-    {
-        return packs_.begin();
-    }
+    auto begin() { return packs_.begin(); }
 
-    auto
-    end()
-    {
-        return packs_.end();
-    }
+    auto begin() const { return packs_.begin(); }
 
-    auto
-    end() const
-    {
-        return packs_.end();
-    }
+    auto end() { return packs_.end(); }
 
-    bool
-    operator==(const PackSet& other) const
-    {
-        return packs_ == other.packs_;
-    }
+    auto end() const { return packs_.end(); }
 
-    bool
-    operator!=(const PackSet& other) const
-    {
-        return !(*this == other);
-    }
+    bool operator==(const PackSet& other) const { return packs_ == other.packs_; }
+
+    bool operator!=(const PackSet& other) const { return !(*this == other); }
 };
