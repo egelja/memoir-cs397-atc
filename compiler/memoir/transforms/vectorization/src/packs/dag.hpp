@@ -1,7 +1,6 @@
 #pragma once
 
 #include "pack.hpp"
-#include "pack_set.hpp"
 
 #include "llvm/IR/Instruction.h"
 
@@ -15,19 +14,25 @@ class PackDAG;
  * A node in the PackSetDAG.
  */
 class PackDAGNode {
-    using NodeIdxMap = std::unordered_map<PackDAGNode*, size_t>;
+public:
+    // info about the producer of some data
+    struct producer_info_t {
+        std::weak_ptr<PackDAGNode> node; // who produced this data
+        size_t node_idx;                 // which lane is the data in?
+    };
 
+    // Who produces the data for each lane in this pack?
+    using LaneProducerMap = std::vector<producer_info_t>;
+
+private:
     // the of instructions we care about
     const Pack pack_;
 
-    // Map from
-    //    idx of instruction
-    //        -> pack that produces instruction operand
-    //        -> index of producing instruction in producing pack
+    // Map from op_idx -> instr_index -> (producing_pack, pp_idx)
     //
-    // So operands_[1][p] = 3 means the fourth instruction in pack p produces a
-    // value used by the second instruction in our pack.
-    std::vector<NodeIdxMap> operand_nodes_;
+    // So operand_nodes_[0][1] = (p, 3) means pack node p produces operand 0 for
+    // instruction 1 in lane 3
+    std::vector<LaneProducerMap> operand_nodes_;
 
     // parent node
     PackDAG* parent_;
@@ -48,14 +53,34 @@ public:
      */
     bool is_seed() const { return pack_.is_seed(); }
 
+    /**
+     * How many lanes (instructions) are in this pack.
+     */
+    size_t num_lanes() const { return pack_.num_lanes(); }
+
+    /**
+     * How many arguments does the instruction of this pack have?
+     */
+    size_t num_operands() const { return pack_.num_operands(); }
+
     friend class PackDAG;
 
+    /////////////////////////////////
+
+    size_t size() const { return pack_.size(); }
+
+    auto* operator[](size_t idx) const { return pack_[idx]; }
+
+    auto* front() const { return pack_.front(); }
+
+    auto* back() const { return pack_.back(); }
+
+    const auto begin() const { return pack_.begin(); }
+
+    const auto end() const { return pack_.end(); }
+
 private:
-    PackDAGNode(Pack pack, PackDAG* parent) :
-        pack_(std::move(pack)),
-        operand_nodes_(pack_.size(), NodeIdxMap{}),
-        parent_(parent)
-    {}
+    PackDAGNode(Pack pack, PackDAG* parent);
 };
 
 /**
@@ -139,10 +164,10 @@ private:
     /**
      * Initialize the operand map of a new node.
      */
-    void init_node_op_map_(PackDAGNode& node);
+    void init_node_op_map_(std::shared_ptr<PackDAGNode>& node);
 
     /**
      * Update operand maps for other nodes.
      */
-    void update_other_op_maps_(PackDAGNode* producer_node);
+    void update_other_op_maps_(std::shared_ptr<PackDAGNode>& node);
 };

@@ -4,11 +4,23 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "memoir/support/Print.hpp"
-#include "memoir/transforms/vectorization/src/utils/llvm.hpp"
 
 #include <memory>
-#include <ostream>
-#include <unordered_set>
+
+///////////////////////////////////////////////////////////////////////////////
+
+PackDAGNode::PackDAGNode(Pack pack, PackDAG* parent) :
+    pack_(std::move(pack)), operand_nodes_(), parent_(parent)
+{
+    LaneProducerMap map;
+    for (size_t i = 0; i < num_lanes(); ++i)
+        map.push_back({std::weak_ptr<PackDAGNode>{}, 0});
+
+    for (size_t i = 0; i < num_operands(); ++i)
+        operand_nodes_.push_back(map); // copy
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 std::shared_ptr<PackDAGNode>
 PackDAG::add_node(Pack pack)
@@ -30,10 +42,10 @@ PackDAG::add_node(Pack pack)
     }
 
     // set up our operand map
-    init_node_op_map_(*node);
+    init_node_op_map_(node);
 
     // update operand maps in other instructions
-    update_other_op_maps_(node.get());
+    update_other_op_maps_(node);
 
     // add the node to our graph
     nodes_.push_back(node);
@@ -45,17 +57,17 @@ PackDAG::add_node(Pack pack)
 }
 
 void
-PackDAG::init_node_op_map_(PackDAGNode& node)
+PackDAG::init_node_op_map_(std::shared_ptr<PackDAGNode>& node)
 {
-    size_t pack_idx = 0;
+    for (size_t op_idx = 0; op_idx < node->num_operands(); ++op_idx) {
+        for (size_t lane_idx = 0; lane_idx < node->num_lanes(); ++lane_idx) {
+            // get the instruction
+            auto* inst = node->pack()[lane_idx];
 
-    for (auto* instr : node.pack()) {
-        // get operands map
-        auto& inst_op_node_idxs = node.operand_nodes_[pack_idx];
-
-        for (size_t i = 0; i < instr->getNumOperands(); ++i) {
             // get the operand
-            auto* op_instr = llvm::dyn_cast<llvm::Instruction>(instr->getOperand(i));
+            auto* op_instr =
+                llvm::dyn_cast<llvm::Instruction>(inst->getOperand(op_idx));
+
             if (!op_instr)
                 continue;
 
@@ -64,40 +76,46 @@ PackDAG::init_node_op_map_(PackDAGNode& node)
             if (it == inst_to_node_.end())
                 continue;
 
-            auto [op_node, op_node_inst_idx] = it->second;
+            auto [op_node, op_node_lane] = it->second;
 
             // update our map
-            inst_op_node_idxs[op_node.get()] = op_node_inst_idx;
-        }
+            if (op_node == node) {
+                llvm::memoir::println(
+                    "Pack references itself: \n", op_node->pack().dbg_string()
+                );
+                abort();
+            }
 
-        // next instruction
-        pack_idx++;
+            node->operand_nodes_[op_idx][lane_idx] = {op_node, op_node_lane};
+        }
     }
 }
 
 void
-PackDAG::update_other_op_maps_(PackDAGNode* producer_node)
+PackDAG::update_other_op_maps_(std::shared_ptr<PackDAGNode>& node)
 {
-    // find all users for each index in our node
-    std::vector<std::unordered_set<llvm::Instruction*>> users_for_inst;
-
-    for (auto* inst : producer_node->pack())
-        users_for_inst.push_back(get_users_set(inst));
-
     // update other nodes
-    for (size_t inst_idx = 0; inst_idx < users_for_inst.size(); ++inst_idx) {
-        const auto& users = users_for_inst[inst_idx];
+    for (size_t lane_idx = 0; lane_idx < node->num_lanes(); ++lane_idx) {
+        // get the instruction
+        auto* inst = node->pack()[lane_idx];
 
-        for (auto* user : users) {
+        for (auto& use : inst->uses()) {
+            // deconstruct use
+            size_t op_idx = use.getOperandNo();
+
+            auto* user = llvm::dyn_cast<llvm::Instruction>(use.getUser());
+            if (!user)
+                continue;
+
             // find the user
             auto it = inst_to_node_.find(user);
             if (it == inst_to_node_.end())
                 continue;
 
-            auto [node, node_inst_idx] = it->second;
+            auto [user_node, user_node_lane] = it->second;
 
             // update its map
-            node->operand_nodes_[node_inst_idx][producer_node] = inst_idx;
+            user_node->operand_nodes_[op_idx][user_node_lane] = {node, lane_idx};
         }
     }
 }
@@ -208,28 +226,31 @@ PackDAG::to_graphviz() const
         // emit the node declaration
         emit_node_decl(ss, node.get());
 
-        // find nodes we connect to
-        std::unordered_set<PackDAGNode*> connected_nodes;
+        // find connections
+        std::unordered_map<PackDAGNode*, IndexMap> idx_maps;
 
-        for (const auto& node_idx_map : node->operand_nodes_)
-            for (const auto& [node, idx] : node_idx_map)
-                connected_nodes.insert(node);
+        for (size_t op = 0; op < node->num_operands(); ++op) {
+            for (size_t lane = 0; lane < node->num_lanes(); ++lane) {
+                // get producer node and lane
+                auto [prod_node_ptr, prod_node_lane] = node->operand_nodes_[op][lane];
 
-        // emit connections
-        for (auto* op_node : connected_nodes) {
-            // get idx map
-            IndexMap idx_map;
+                auto prod_node = prod_node_ptr.lock();
+                if (!prod_node)
+                    continue;
 
-            for (size_t i = 0; i < node->operand_nodes_.size(); ++i) {
-                auto it = node->operand_nodes_[i].find(op_node);
+                // save to our index map
+                std::pair<size_t, size_t> idx_pair{prod_node_lane, lane};
 
-                if (it != node->operand_nodes_[i].end())
-                    idx_map.emplace_back(it->second, i); // src idx, dest idx
+                if (idx_maps.count(prod_node.get()))
+                    idx_maps[prod_node.get()].push_back(idx_pair);
+                else
+                    idx_maps[prod_node.get()] = {idx_pair};
             }
-
-            // emit edge
-            emit_edge(ss, op_node, node.get(), idx_map);
         }
+
+        // emit edges
+        for (auto& [prod_node, idx_map] : idx_maps)
+            emit_edge(ss, prod_node, node.get(), idx_map);
     }
 
     // footer

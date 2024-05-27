@@ -28,6 +28,16 @@ public:
 
     bool is_seed() const { return is_seed_; }
 
+    /**
+     * How many arguments does the instruction of this pack have?
+     */
+    size_t num_operands() const { return insts_[0]->getNumOperands(); }
+
+    /**
+     * How many instructions (lanes) are in this pack?
+     */
+    size_t num_lanes() const { return insts_.size(); }
+
     std::string dbg_string() const;
 
     ////////// C++ boilerplate stuff //////////
