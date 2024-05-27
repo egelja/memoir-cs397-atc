@@ -4,6 +4,15 @@
 
 #include <deque>
 
+enum class PackType {
+    // Memory
+    LOAD,
+    STORE,
+
+    // Computation
+    ADD,
+};
+
 class Pack {
 protected:
     std::deque<llvm::Instruction*> insts_;
@@ -38,6 +47,11 @@ public:
      */
     size_t num_lanes() const { return insts_.size(); }
 
+    /**
+     * Get the type of this pack.
+     */
+    PackType type() const;
+
     std::string dbg_string() const;
 
     ////////// C++ boilerplate stuff //////////
@@ -64,6 +78,8 @@ public:
 
     bool operator!=(const Pack& other) const { return !(*this == other); }
 };
+
+std::string pack_type_string(PackType type);
 
 ///////////////////////////////////////////////////////////////////////////////
 

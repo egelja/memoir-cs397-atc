@@ -4,6 +4,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "memoir/support/Print.hpp"
+#include "memoir/transforms/vectorization/src/packs/pack.hpp"
 
 #include <memory>
 
@@ -21,6 +22,23 @@ PackDAGNode::PackDAGNode(Pack pack, PackDAG* parent) :
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+namespace {
+
+void
+handle_cyclical_node(PackDAGNode& node)
+{
+    llvm::memoir::println("Pack references itself: \n", node.pack().dbg_string());
+    abort();
+}
+
+bool
+skip_node_map_update(PackDAGNode* producer, PackDAGNode* consumer)
+{
+    return producer == consumer && producer->type() == PackType::STORE;
+}
+
+} // namespace
 
 std::shared_ptr<PackDAGNode>
 PackDAG::add_node(Pack pack)
@@ -78,13 +96,13 @@ PackDAG::init_node_op_map_(std::shared_ptr<PackDAGNode>& node)
 
             auto [op_node, op_node_lane] = it->second;
 
+            // skip stores that reference themselves because of MemOIR
+            if (skip_node_map_update(op_node.get(), node.get()))
+                continue;
+
             // update our map
-            if (op_node == node) {
-                llvm::memoir::println(
-                    "Pack references itself: \n", op_node->pack().dbg_string()
-                );
-                abort();
-            }
+            if (op_node == node)
+                handle_cyclical_node(*node);
 
             node->operand_nodes_[op_idx][lane_idx] = {op_node, op_node_lane};
         }
@@ -113,6 +131,14 @@ PackDAG::update_other_op_maps_(std::shared_ptr<PackDAGNode>& node)
                 continue;
 
             auto [user_node, user_node_lane] = it->second;
+
+            // skip stores that reference themselves because of MemOIR
+            if (skip_node_map_update(node.get(), user_node.get()))
+                continue;
+
+            // update our map
+            if (node == user_node)
+                handle_cyclical_node(*node);
 
             // update its map
             user_node->operand_nodes_[op_idx][user_node_lane] = {node, lane_idx};
@@ -159,10 +185,15 @@ node_label(PackDAGNode& node)
 {
     std::string label;
 
+    // operation type
+    label += "(" + pack_type_string(node.type()) + ")  ";
+
+    // operand list
     for (const auto* inst : node.pack())
         label += get_number_of_instruction(inst) + ", ";
 
     label.erase(label.size() - 2); // drop last ', '
+
     return label;
 }
 

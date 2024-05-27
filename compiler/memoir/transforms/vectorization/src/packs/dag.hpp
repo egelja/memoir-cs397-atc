@@ -49,6 +49,11 @@ public:
     PackDAG* parent() const { return parent_; }
 
     /**
+     * Get the type of this pack.
+     */
+    PackType type() const { return pack_.type(); }
+
+    /**
      * Get if this node's pack is a seed pack.
      */
     bool is_seed() const { return pack_.is_seed(); }
