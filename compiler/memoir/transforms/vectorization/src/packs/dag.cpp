@@ -1,9 +1,13 @@
 #include "dag.hpp"
 
+#include "llvm/IR/Instruction.h"
+#include "llvm/Support/raw_ostream.h"
+
 #include "memoir/support/Print.hpp"
 #include "memoir/transforms/vectorization/src/utils/llvm.hpp"
 
 #include <memory>
+#include <ostream>
 #include <unordered_set>
 
 std::shared_ptr<PackDAGNode>
@@ -96,4 +100,141 @@ PackDAG::update_other_op_maps_(PackDAGNode* producer_node)
             node->operand_nodes_[node_inst_idx][producer_node] = inst_idx;
         }
     }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+namespace {
+
+using IndexMap = std::vector<std::pair<size_t, size_t>>;
+
+/**
+ * ONLY FOR DEBUGGING PURPOSES.
+ */
+std::string
+get_number_of_instruction(const llvm::Instruction* inst)
+{
+    std::string str;
+    llvm::raw_string_ostream ss(str);
+
+    ss << *inst;
+    ss.flush();
+
+    // now extract the %XX bit
+    // first two chars are always spaces
+    std::string res;
+
+    for (size_t i = 2; i < str.size() && str[i] != ' '; ++i)
+        res += str[i];
+
+    return res;
+}
+
+std::string
+node_name(PackDAGNode* node)
+{
+    return std::string("node") + std::to_string(reinterpret_cast<uintptr_t>(node));
+}
+
+std::string
+node_label(PackDAGNode& node)
+{
+    std::string label;
+
+    for (const auto* inst : node.pack())
+        label += get_number_of_instruction(inst) + ", ";
+
+    label.erase(label.size() - 2); // drop last ', '
+    return label;
+}
+
+void
+emit_node_decl(llvm::raw_string_ostream& ss, PackDAGNode* node)
+{
+    // emit node name
+    ss << node_name(node) << " [";
+
+    // emit label
+    ss << "label=\"" << node_label(*node) << "\"";
+
+    // emit color for seed nodes
+    if (node->is_seed())
+        ss << ", color=green";
+
+    // finish node
+    ss << ", shape=box];"
+       << "\n";
+}
+
+void
+emit_edge(
+    llvm::raw_string_ostream& ss,
+    PackDAGNode* src,
+    PackDAGNode* dest,
+    const IndexMap& idx_map
+)
+{
+    // edge header
+    ss << node_name(src) << " -> " << node_name(dest);
+
+    // label
+    ss << " [label=\"{";
+
+    for (const auto& [x, y] : idx_map)
+        ss << "(" << x << ", " << y << ") ";
+
+    // finish up
+    ss.str().pop_back(); // drop trailing space, little jank (XXX)
+
+    ss << "}\"];"
+       << "\n";
+}
+
+} // namespace
+
+std::string
+PackDAG::to_graphviz() const
+{
+    std::string str;
+    llvm::raw_string_ostream ss(str);
+
+    // header
+    ss << "\n\n"
+       << "digraph G {"
+       << "\n";
+
+    // nodes
+    for (auto& node : nodes_) {
+        // emit the node declaration
+        emit_node_decl(ss, node.get());
+
+        // find nodes we connect to
+        std::unordered_set<PackDAGNode*> connected_nodes;
+
+        for (const auto& node_idx_map : node->operand_nodes_)
+            for (const auto& [node, idx] : node_idx_map)
+                connected_nodes.insert(node);
+
+        // emit connections
+        for (auto* op_node : connected_nodes) {
+            // get idx map
+            IndexMap idx_map;
+
+            for (size_t i = 0; i < node->operand_nodes_.size(); ++i) {
+                auto it = node->operand_nodes_[i].find(op_node);
+
+                if (it != node->operand_nodes_[i].end())
+                    idx_map.emplace_back(it->second, i); // src idx, dest idx
+            }
+
+            // emit edge
+            emit_edge(ss, op_node, node.get(), idx_map);
+        }
+    }
+
+    // footer
+    ss << "}"
+       << "\n\n\n";
+
+    return ss.str();
 }
