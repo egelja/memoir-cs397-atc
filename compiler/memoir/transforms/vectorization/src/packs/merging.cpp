@@ -40,6 +40,7 @@ merge_packs(PackSet ps)
         }
 
 restart:
+    /* why c++ */;
     } while (dirty);
 
     return ps;

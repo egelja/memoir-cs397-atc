@@ -1,3 +1,4 @@
+#include "packs/merging.hpp"
 #include "packs/pack_set.hpp"
 
 #include <llvm/IR/Function.h>
@@ -378,15 +379,16 @@ struct SLPPass : public llvm::ModulePass {
         auto& noelle = getAnalysis<Noelle>();
         auto pdg = noelle.getProgramDependenceGraph();
         auto fdg = pdg->createFunctionSubgraph(*BB.getParent());
-        PacksetExtender extender(BB, &packset, fdg);
+
+        PackSet extended_packs = packset;
+        PacksetExtender extender(BB, &extended_packs, fdg);
+
         extender.extend();
         llvm::memoir::println("Extended Packset: ", packset.dbg_string());
-        // P = extend_packlist(BB, P)
-        // PackSet extended_packs = packset; // temp
 
         // Combine packs into things that can be vectorized
-        // auto merged_packs = merge_packs(extended_packs);
-        // llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
+        auto merged_packs = merge_packs(extended_packs);
+        llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
 
         return false;
     }
