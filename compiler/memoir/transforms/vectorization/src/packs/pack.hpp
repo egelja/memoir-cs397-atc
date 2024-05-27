@@ -7,13 +7,22 @@
 class Pack {
 protected:
     std::deque<llvm::Instruction*> insts_;
+    bool is_seed_;
 
 public:
+    Pack() : insts_(), is_seed_(false) {}
+
+    explicit Pack(bool is_seed) : insts_(), is_seed_(is_seed) {}
+
     void append_right(llvm::Instruction* i) { insts_.push_back(i); }
 
     void append_left(llvm::Instruction* i) { insts_.push_front(i); }
 
     size_t index_of(llvm::Instruction* inst) const;
+
+    bool& is_seed() { return is_seed_; }
+
+    bool is_seed() const { return is_seed_; }
 
     std::string dbg_string() const;
 

@@ -20,6 +20,7 @@
 // #include "memoir/transforms/vectorization/src/packs/merging.hpp"
 #include "noelle/core/Noelle.hpp"
 
+#include "memoir/transforms/vectorization/src/packs/dag.hpp"
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
 
@@ -132,7 +133,7 @@ private:
                         && &left_inst->getObjectOperand()
                                == &right_inst->getObjectOperand()) {
                         ps.insert(
-                            &left_inst->getCallInst(), &right_inst->getCallInst()
+                            &left_inst->getCallInst(), &right_inst->getCallInst(), true
                         );
 
                         // add for removal to enforce that instructions only occupy one
@@ -372,15 +373,15 @@ struct SLPPass : public llvm::ModulePass {
         llvm::memoir::println(std::string(80, '-'));
 
         // find packs
-        PackSet packset = visitor.create_seeded_pack_set();
-        llvm::memoir::println("Seeded PackSet: ", packset.dbg_string());
+        PackSet seed_packs = visitor.create_seeded_pack_set();
+        llvm::memoir::println("Seeded PackSet: ", seed_packs.dbg_string());
 
         // TODO: Extend the packs with use-def and def-use chains
         auto& noelle = getAnalysis<Noelle>();
         auto pdg = noelle.getProgramDependenceGraph();
         auto fdg = pdg->createFunctionSubgraph(*BB.getParent());
 
-        PackSet extended_packs = packset;
+        PackSet extended_packs = seed_packs;
         PacksetExtender extender(BB, &extended_packs, fdg);
 
         extender.extend();
@@ -389,6 +390,12 @@ struct SLPPass : public llvm::ModulePass {
         // Combine packs into things that can be vectorized
         auto merged_packs = merge_packs(extended_packs);
         llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
+
+        // create our DAG
+        PackDAG dag;
+
+        for (Pack pack : merged_packs)
+            dag.add_node(std::move(pack));
 
         return false;
     }

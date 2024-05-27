@@ -14,8 +14,21 @@ public:
      *
      * @param left Left instruction in the pack.
      * @param right Right instruction in the pack.
+     * @param is_seed If the set is a seed.
      */
-    void insert(llvm::Instruction* left, llvm::Instruction* right);
+    void insert(llvm::Instruction* left, llvm::Instruction* right, bool is_seed);
+
+    /**
+     * Create a new pack with two instructions and insert it into this pack set.
+     *
+     * @param left Left instruction in the pack.
+     * @param right Right instruction in the pack.
+     * @param is_seed If the set is a seed.
+     */
+    void insert(llvm::Instruction* left, llvm::Instruction* right)
+    {
+        insert(left, right, false);
+    }
 
     /**
      * Insert an existing pack into this pack set.

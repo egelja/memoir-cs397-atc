@@ -26,6 +26,11 @@ merge_packs(PackSet ps)
                 ps.remove(p1);
                 ps.remove(p2);
 
+                if (p1.is_seed()) {
+                    assert(p2.is_seed());
+                    merged.is_seed() = true;
+                }
+
                 ps.insert(std::move(merged));
 
                 // need to keep repeating

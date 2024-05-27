@@ -1,9 +1,9 @@
 #include "pack_set.hpp"
 
 void
-PackSet::insert(llvm::Instruction* left, llvm::Instruction* right)
+PackSet::insert(llvm::Instruction* left, llvm::Instruction* right, bool is_seed)
 {
-    Pack pair;
+    Pack pair(is_seed);
 
     pair.append_right(left);
     pair.append_right(right);

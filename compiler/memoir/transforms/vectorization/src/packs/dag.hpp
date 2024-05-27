@@ -15,6 +15,8 @@ class PackDAG;
  * A node in the PackSetDAG.
  */
 class PackDAGNode {
+    using NodeIdxMap = std::unordered_map<PackDAGNode*, size_t>;
+
     // the of instructions we care about
     const Pack pack_;
 
@@ -25,7 +27,7 @@ class PackDAGNode {
     //
     // So operands_[1][p] = 3 means the fourth instruction in pack p produces a
     // value used by the second instruction in our pack.
-    std::vector<std::unordered_map<std::weak_ptr<PackDAGNode>, size_t>> operand_nodes_;
+    std::vector<NodeIdxMap> operand_nodes_;
 
     // parent node
     PackDAG* parent_;
@@ -46,7 +48,7 @@ public:
 private:
     PackDAGNode(Pack pack, PackDAG* parent) :
         pack_(std::move(pack)),
-        operand_nodes_(pack_.size(), std::unordered_map<PackDAGNode*, size_t>{}),
+        operand_nodes_(pack_.size(), NodeIdxMap{}),
         parent_(parent)
     {}
 };
@@ -93,15 +95,6 @@ public:
      * @returns A pointer to the newly created graph node.
      */
     std::shared_ptr<PackDAGNode> add_node(Pack pack);
-
-    /**
-     * Add a seed node to the graph.
-     *
-     * @param pack The packed instructions in this node.
-     *
-     * @returns A pointer to the newly created graph node.
-     */
-    std::shared_ptr<PackDAGNode> add_seed(Pack pack);
 
     ///////////// C++ Boilerplate /////////////
 

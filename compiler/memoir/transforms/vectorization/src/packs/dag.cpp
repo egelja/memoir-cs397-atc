@@ -1,6 +1,10 @@
 #include "dag.hpp"
 
+#include "memoir/support/Print.hpp"
+#include "memoir/transforms/vectorization/src/utils/llvm.hpp"
+
 #include <memory>
+#include <unordered_set>
 
 std::shared_ptr<PackDAGNode>
 PackDAG::add_node(Pack pack)
@@ -12,6 +16,7 @@ PackDAG::add_node(Pack pack)
     size_t pack_idx = 0;
 
     for (auto* instr : node->pack()) {
+        llvm::memoir::println("Adding instr: ", *instr);
         // instructions should not already be here
         assert(inst_to_node_.count(instr) == 0);
 
@@ -28,14 +33,9 @@ PackDAG::add_node(Pack pack)
 
     // add the node to our graph
     nodes_.push_back(node);
-    return node;
-}
 
-std::shared_ptr<PackDAGNode>
-PackDAG::add_seed(Pack pack)
-{
-    auto node = add_node(std::move(pack));
-    seeds_.push_back(node);
+    if (node->pack().is_seed())
+        seeds_.push_back(node);
 
     return node;
 }
@@ -47,7 +47,7 @@ PackDAG::init_node_op_map_(PackDAGNode& node)
 
     for (auto* instr : node.pack()) {
         // get operands map
-        auto& inst_op_nodes = node.operand_nodes_[pack_idx];
+        auto& inst_op_node_idxs = node.operand_nodes_[pack_idx];
 
         for (size_t i = 0; i < instr->getNumOperands(); ++i) {
             // get the operand
@@ -60,10 +60,10 @@ PackDAG::init_node_op_map_(PackDAGNode& node)
             if (it == inst_to_node_.end())
                 continue;
 
-            auto [op_node, op_node_idx] = it->second;
+            auto [op_node, op_node_inst_idx] = it->second;
 
             // update our map
-            inst_op_nodes[op_node] = op_node_idx;
+            inst_op_node_idxs[op_node.get()] = op_node_inst_idx;
         }
 
         // next instruction
@@ -75,4 +75,25 @@ void
 PackDAG::update_other_op_maps_(PackDAGNode* producer_node)
 {
     // find all users for each index in our node
+    std::vector<std::unordered_set<llvm::Instruction*>> users_for_inst;
+
+    for (auto* inst : producer_node->pack())
+        users_for_inst.push_back(get_users_set(inst));
+
+    // update other nodes
+    for (size_t inst_idx = 0; inst_idx < users_for_inst.size(); ++inst_idx) {
+        const auto& users = users_for_inst[inst_idx];
+
+        for (auto* user : users) {
+            // find the user
+            auto it = inst_to_node_.find(user);
+            if (it == inst_to_node_.end())
+                continue;
+
+            auto [node, node_inst_idx] = it->second;
+
+            // update its map
+            node->operand_nodes_[node_inst_idx][producer_node] = inst_idx;
+        }
+    }
 }
