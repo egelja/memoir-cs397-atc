@@ -43,6 +43,11 @@ public:
      */
     PackDAG* parent() const { return parent_; }
 
+    /**
+     * Get if this node's pack is a seed pack.
+     */
+    bool is_seed() const { return pack_.is_seed(); }
+
     friend class PackDAG;
 
 private:
@@ -95,6 +100,16 @@ public:
      * @returns A pointer to the newly created graph node.
      */
     std::shared_ptr<PackDAGNode> add_node(Pack pack);
+
+    /**
+     * Convert this graph to a GraphViz representation that can be viewed.
+     */
+    std::string to_graphviz() const;
+
+    /**
+     * Get a debugging string representing this graph.
+     */
+    std::string dbg_string() const { return to_graphviz(); }
 
     ///////////// C++ Boilerplate /////////////
 

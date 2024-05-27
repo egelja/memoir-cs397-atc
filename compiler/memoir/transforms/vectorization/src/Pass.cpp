@@ -77,6 +77,8 @@ struct SLPPass : public llvm::ModulePass {
         for (Pack pack : merged_packs)
             dag.add_node(std::move(pack));
 
+        llvm::memoir::println("Graph:", dag.dbg_string());
+
         return false;
     }
 
