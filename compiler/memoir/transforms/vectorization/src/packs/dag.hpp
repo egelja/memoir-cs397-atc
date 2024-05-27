@@ -25,7 +25,7 @@ class PackDAGNode {
     //
     // So operands_[1][p] = 3 means the fourth instruction in pack p produces a
     // value used by the second instruction in our pack.
-    std::vector<std::unordered_map<PackDAGNode*, size_t>> operands_;
+    std::vector<std::unordered_map<std::weak_ptr<PackDAGNode>, size_t>> operand_nodes_;
 
     // parent node
     PackDAG* parent_;
@@ -44,33 +44,46 @@ public:
     friend class PackDAG;
 
 private:
-    PackDAGNode(Pack pack, PackDAG* parent);
+    PackDAGNode(Pack pack, PackDAG* parent) :
+        pack_(std::move(pack)),
+        operand_nodes_(pack_.size(), std::unordered_map<PackDAGNode*, size_t>{}),
+        parent_(parent)
+    {}
 };
 
 /**
  * A DAG of packed instructions.
  */
 class PackDAG {
-    using InstructionSet = std::unordered_set<llvm::Instruction*>;
+public:
+    struct instr_info_t {
+        std::shared_ptr<PackDAGNode> node; // node containing the instruction
+        size_t idx;                        // index within the node
+    };
 
-    // nodes stored in reverse topological order
-    // the seed pack goes first
-    // TODO do we need to support multiple seed packs???
+private:
+    // nodes stored in topological order
     std::vector<std::shared_ptr<PackDAGNode>> nodes_;
+    std::vector<std::shared_ptr<PackDAGNode>> seeds_;
 
     // map from instruction to the node containing that instruction
-    std::unordered_map<llvm::Instruction*, std::shared_ptr<PackDAGNode>> inst_to_node_;
+    std::unordered_map<llvm::Instruction*, instr_info_t> inst_to_node_;
 
 public:
     /**
-     * Create a PackDAG from a packset and seed nodes.
+     * Create an empty PackDAG.
      */
-    PackDAG(const PackSet& packset, const InstructionSet& seeds);
+    PackDAG() {}
 
     /**
      * Get our seed nodes.
      */
-    std::shared_ptr<PackDAGNode> seeds() const { return nodes_.front(); }
+    const auto& seeds() const { return seeds_; }
+
+    /**
+     * Get all the nodes in this graph.
+     */
+    const auto& node() const { return nodes_; }
 
     /**
      * Add a node to the graph.
@@ -81,6 +94,15 @@ public:
      */
     std::shared_ptr<PackDAGNode> add_node(Pack pack);
 
+    /**
+     * Add a seed node to the graph.
+     *
+     * @param pack The packed instructions in this node.
+     *
+     * @returns A pointer to the newly created graph node.
+     */
+    std::shared_ptr<PackDAGNode> add_seed(Pack pack);
+
     ///////////// C++ Boilerplate /////////////
 
     auto begin() { return nodes_.rbegin(); }
@@ -90,6 +112,8 @@ public:
     auto end() { return nodes_.rend(); }
 
     auto end() const { return nodes_.rend(); }
+
+    size_t size() const { return nodes_.size(); }
 
 private:
     /**
@@ -105,12 +129,12 @@ private:
     }
 
     /**
-     * Find the seed pack in a pack set.
+     * Initialize the operand map of a new node.
      */
-    Pack find_seed_pack_(const PackSet& packset, const InstructionSet& seeds);
+    void init_node_op_map_(PackDAGNode& node);
 
     /**
-     * Update argument map for all instructions.
+     * Update operand maps for other nodes.
      */
-    void update_op_maps_(PackDAGNode* producer_node);
+    void update_other_op_maps_(PackDAGNode* producer_node);
 };

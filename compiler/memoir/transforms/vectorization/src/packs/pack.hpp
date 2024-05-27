@@ -31,6 +31,8 @@ public:
 
     const auto end() const { return insts_.end(); }
 
+    size_t size() const { return insts_.size(); };
+
     auto& operator[](size_t idx) { return insts_.at(idx); }
 
     const auto& operator[](size_t idx) const { return insts_.at(idx); }
