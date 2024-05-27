@@ -93,6 +93,18 @@ public:
 
 private:
     /**
+     * Make a new graph node.
+     *
+     * Friend classes don't work with make_shared.
+     */
+    template <class... Args>
+    std::shared_ptr<PackDAGNode> make_node_(Args... args) const
+    {
+        auto* node = new PackDAGNode(std::forward<Args>(args)...);
+        return std::shared_ptr<PackDAGNode>(node);
+    }
+
+    /**
      * Find the seed pack in a pack set.
      */
     Pack find_seed_pack_(const PackSet& packset, const InstructionSet& seeds);

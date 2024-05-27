@@ -29,7 +29,7 @@ PackDAG::PackDAG(const PackSet& packset, const InstructionSet& seeds)
 {
     // create our seed node
     auto seed_pack = find_seed_pack_(packset, seeds);
-    auto seed_node = std::make_shared<PackDAGNode>(std::move(seed_pack), this);
+    auto seed_node = make_node_(std::move(seed_pack), this);
 
     // add the seed pack to our graph
     nodes_.push_back(seed_node);
@@ -39,7 +39,7 @@ std::shared_ptr<PackDAGNode>
 PackDAG::add_node(Pack pack)
 {
     // create the node and add it to our graph
-    auto node = std::make_shared<PackDAGNode>(std::move(pack), this);
+    auto node = make_node_(std::move(pack), this);
 
     // update operand maps in other instructions
     update_op_maps_(node.get());
