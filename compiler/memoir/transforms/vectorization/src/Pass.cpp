@@ -16,7 +16,9 @@
 #include "memoir/ir/Instructions.hpp"
 #include "memoir/support/InternalDatatypes.hpp"
 #include "memoir/support/Print.hpp"
-#include "memoir/transforms/vectorization/src/packs/merging.hpp"
+// #include "memoir/transforms/vectorization/src/packs/merging.hpp"
+#include "noelle/core/Noelle.hpp"
+
 #include "memoir/utility/FunctionNames.hpp"
 #include "memoir/utility/Metadata.hpp"
 
@@ -27,6 +29,7 @@
 namespace {
 
 using namespace llvm::memoir;
+using namespace arcana::noelle;
 
 class PackSeeder : public llvm::memoir::InstVisitor<PackSeeder, void> {
     // In order for the wrapper to work, we need to declare our parent classes as
@@ -151,6 +154,205 @@ private:
     }
 };
 
+class PacksetExtender {
+    // Class for building out a packset from an initial seeded pack
+    PDG* fdg;
+    Noelle noelle;
+
+    std::unordered_set<llvm::Instruction*> free_left_instrs;
+    std::unordered_set<llvm::Instruction*> free_right_instrs;
+    PackSet* pack_set;
+
+public:
+    PacksetExtender(llvm::BasicBlock& bb, PackSet* p_set, PDG* graph)
+    {
+        pack_set = p_set;
+        fdg = graph;
+
+        for (llvm::Instruction& i : bb) {
+            free_left_instrs.insert(&i);
+            free_right_instrs.insert(&i);
+        }
+
+        // remove instructions already in packs
+        for (auto it = p_set->begin(); it != p_set->end(); it++) {
+            auto pack = *it;
+            auto& left_instr = pack[0];
+            auto& right_instr = pack[1];
+            free_left_instrs.erase(left_instr);
+            free_right_instrs.erase(right_instr);
+        }
+    }
+
+    void extend()
+    {
+        bool changed = true;
+
+        while (changed) {
+            changed = false;
+
+            for (auto it = pack_set->begin(); it != pack_set->end(); it++) {
+                auto pack = *it;
+
+                if (follow_def_uses(pack) || follow_use_defs(pack)) {
+                    changed = true;
+
+                    // stop early since we modified pack_set
+                    break;
+                }
+            }
+        }
+    }
+
+private:
+    bool is_isomorphic(llvm::Instruction* instr_1, llvm::Instruction* instr_2)
+    {
+        // only do a basic check that both instructions are "identical"
+        // other functions deal with making sure paramaters are in the correct order
+        return instr_1->getOpcode() == instr_2->getOpcode();
+    }
+
+    bool is_independent(llvm::Instruction* instr_1, llvm::Instruction* instr_2)
+    {
+        bool dependency_exists = false;
+
+        auto instr_1_iter_f = [&dependency_exists,
+                               instr_2](Value* src, DGEdge<Value, Value>* dep) {
+            // dependency exists if there is an edge between instr_1 and instr_2
+            if (dep->getDst() == instr_2) {
+                dependency_exists = true;
+                return true;
+            }
+
+            return false;
+        };
+
+        fdg->iterateOverDependencesFrom(instr_1, true, true, true, instr_1_iter_f);
+
+        auto instr_2_iter_f = [&dependency_exists,
+                               instr_1](Value* src, DGEdge<Value, Value>* dep) {
+            // dependency exists if there is an edge between instr_2 and instr_1
+            if (dep->getDst() == instr_1) {
+                dependency_exists = true;
+                return true;
+            }
+
+            return false;
+        };
+
+        fdg->iterateOverDependencesFrom(instr_2, true, true, true, instr_2_iter_f);
+
+        return !dependency_exists;
+    }
+
+    bool instrs_can_pack(llvm::Instruction* instr_1, llvm::Instruction* instr_2)
+    {
+        // check that instrs are not in another pack already
+        if ((free_left_instrs.find(instr_1) == free_left_instrs.end())
+            || (free_right_instrs.find(instr_2) == free_right_instrs.end())) {
+            return false;
+        }
+
+        return is_isomorphic(instr_1, instr_2) && is_independent(instr_1, instr_2);
+    }
+
+    bool follow_use_defs(Pack p)
+    {
+        // returns whether new values were added to pack_set
+        llvm::Instruction* left_instr = p[0];
+        llvm::Instruction* right_instr = p[1];
+
+        // sanity check
+        assert(is_isomorphic(left_instr, right_instr));
+
+        bool changed = false;
+        for (int i = 0; i < left_instr->getNumOperands(); i++) {
+            // grab operands in the same position
+            auto* op_1 = left_instr->getOperand(i);
+            auto* op_2 = right_instr->getOperand(i);
+
+            // check if definition of operands is packable
+            if (auto* op_instr_1 = llvm::dyn_cast<llvm::Instruction>(op_1)) {
+                if (auto* op_instr_2 = llvm::dyn_cast<llvm::Instruction>(op_2)) {
+                    if (instrs_can_pack(op_instr_1, op_instr_2)) {
+                        pack_set->insert(op_instr_1, op_instr_2);
+
+                        free_left_instrs.erase(op_instr_1);
+                        free_right_instrs.erase(op_instr_2);
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    bool follow_def_uses(Pack p)
+    {
+        // returns whether new values were added to pack set
+        llvm::Instruction* left_instr = p[0];
+        llvm::Instruction* right_instr = p[1];
+
+        bool changed = false;
+
+        // look for uses of left/right instr that occupy the same operand position
+        for (auto left_user : left_instr->users()) {
+            auto* left_user_instr = dyn_cast<llvm::Instruction>(left_user);
+            if (left_user_instr == NULL) {
+                continue;
+            }
+
+            for (auto right_user : right_instr->users()) {
+                auto* right_user_instr = dyn_cast<llvm::Instruction>(right_user);
+                if (right_user_instr == NULL) {
+                    continue;
+                }
+
+                // we can't have a pack with two of the same instr
+                if (left_user_instr == right_user_instr) {
+                    continue;
+                }
+
+                if (left_user_instr->getNumOperands()
+                    != right_user_instr->getNumOperands()) {
+                    continue;
+                }
+
+                // no easy way to grab the operand position of a use
+                for (int i = 0; i < left_user_instr->getNumOperands(); i++) {
+                    auto op_1 = left_user_instr->getOperand(i);
+                    auto op_2 = right_user_instr->getOperand(i);
+
+                    if (auto* op_instr_1 = dyn_cast<llvm::Instruction>(op_1)) {
+                        if (auto* op_instr_2 = dyn_cast<llvm::Instruction>(op_2)) {
+                            if (op_instr_1 == left_instr && op_instr_2 == right_instr) {
+                                if (instrs_can_pack(
+                                        left_user_instr, right_user_instr
+                                    )) {
+                                    pack_set->insert(left_user_instr, right_user_instr);
+
+                                    free_left_instrs.erase(left_user_instr);
+                                    free_right_instrs.erase(right_user_instr);
+                                    changed = true;
+
+                                    // in the paper, this function chooses the pair of
+                                    // instructions that produce the largest savings.
+                                    // since we don't have a cost model, we return the
+                                    // first found
+                                    return changed;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return changed;
+    }
+};
+
 struct SLPPass : public llvm::ModulePass {
     static char ID;
 
@@ -173,12 +375,18 @@ struct SLPPass : public llvm::ModulePass {
         llvm::memoir::println("Seeded PackSet: ", packset.dbg_string());
 
         // TODO: Extend the packs with use-def and def-use chains
+        auto& noelle = getAnalysis<Noelle>();
+        auto pdg = noelle.getProgramDependenceGraph();
+        auto fdg = pdg->createFunctionSubgraph(*BB.getParent());
+        PacksetExtender extender(BB, &packset, fdg);
+        extender.extend();
+        llvm::memoir::println("Extended Packset: ", packset.dbg_string());
         // P = extend_packlist(BB, P)
-        PackSet extended_packs = packset; // temp
+        // PackSet extended_packs = packset; // temp
 
         // Combine packs into things that can be vectorized
-        auto merged_packs = merge_packs(extended_packs);
-        llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
+        // auto merged_packs = merge_packs(extended_packs);
+        // llvm::memoir::println("Merged PackSet: ", merged_packs.dbg_string());
 
         return false;
     }
@@ -197,7 +405,11 @@ struct SLPPass : public llvm::ModulePass {
         return changed;
     }
 
-    void getAnalysisUsage(llvm::AnalysisUsage& AU) const override { return; }
+    void getAnalysisUsage(llvm::AnalysisUsage& AU) const override
+    {
+        AU.addRequired<Noelle>();
+        return;
+    }
 };
 
 // Next there is code to register your pass to "opt"
