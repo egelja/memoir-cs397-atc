@@ -384,7 +384,7 @@ struct SLPPass : public llvm::ModulePass {
         PacksetExtender extender(BB, &extended_packs, fdg);
 
         extender.extend();
-        llvm::memoir::println("Extended Packset: ", packset.dbg_string());
+        llvm::memoir::println("Extended Packset: ", extended_packs.dbg_string());
 
         // Combine packs into things that can be vectorized
         auto merged_packs = merge_packs(extended_packs);
