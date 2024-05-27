@@ -18,6 +18,7 @@ merge_packs(PackSet ps)
 
                 // do the merge
                 Pack merged = p1;
+                merged.pop_right(); // drop duplicate instruction
 
                 for (auto* inst : p2)
                     merged.append_right(inst);

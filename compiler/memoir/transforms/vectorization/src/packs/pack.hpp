@@ -18,6 +18,10 @@ public:
 
     void append_left(llvm::Instruction* i) { insts_.push_front(i); }
 
+    void pop_right() { insts_.pop_back(); }
+
+    void pop_left() { insts_.pop_front(); }
+
     size_t index_of(llvm::Instruction* inst) const;
 
     bool& is_seed() { return is_seed_; }
